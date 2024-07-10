@@ -1,2 +1,2 @@
-Flask==2.0.2
+Flask==1.1.5
 azure-storage-blob==12.8.1
