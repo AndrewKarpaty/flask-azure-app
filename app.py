@@ -1,7 +1,6 @@
 import os   
-from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
+from azure.storage.blob import BlobServiceClient
 from flask import Flask, request, redirect
-from datetime import datetime, timedelta
 
 app = Flask(__name__)  
 
@@ -24,16 +23,7 @@ def view_photos():
 
     for blob in blob_items:
         blob_client = container_client.get_blob_client(blob=blob.name) # get blob client to interact with the blob and get blob url
-        sas_token = generate_blob_sas(
-            account_name=blob_service_client.account_name,
-            container_name=container_name,
-            blob_name=blob.name,
-            account_key=blob_service_client.credential.account_key,
-            permission=BlobSasPermissions(read=True),
-            expiry=datetime.utcnow() + timedelta(hours=1) # set expiry time for the SAS token
-        )
-        blob_url_with_sas = f"{blob_client.url}?{sas_token}" # create the URL with SAS token
-        img_html += "<img src='{}' width='auto' height='200' style='margin: 0.5em 0;'/>".format(blob_url_with_sas) # get the blob url with SAS token and append it to the html
+        img_html += "<img src='{}' width='auto' height='200' style='margin: 0.5em 0;'/>".format(blob_client.url) # get the blob url and append it to the html
     
     img_html += "</div>"
 
@@ -65,7 +55,7 @@ def view_photos():
         
     """ + img_html + "</div></body>"
 
-# flask endpoint to upload a photo  
+#flask endpoint to upload a photo  
 @app.route("/upload-photos", methods=["POST"])
 def upload_photos():
     filenames = ""
@@ -79,6 +69,3 @@ def upload_photos():
             print("Ignoring duplicate filenames") # ignore duplicate filenames
         
     return redirect('/')  
-
-if __name__ == "__main__":
-    app.run(debug=True)
