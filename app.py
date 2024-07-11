@@ -2,11 +2,11 @@ from flask import Flask, render_template_string, send_file
 from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
 from io import BytesIO
 
+
 app = Flask(__name__)
 
-# Configure your Azure Blob Storage connection string and container name
-AZURE_CONNECTION_STRING = 'your_connection_string_here'
-CONTAINER_NAME = 'your_container_name_here'
+AZURE_CONNECTION_STRING = os.getenv('AZURE_STORAGEBLOB_CONNECTIONSTRING')
+CONTAINER_NAME = 'cp-images'
 
 # Initialize the BlobServiceClient
 blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
