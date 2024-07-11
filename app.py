@@ -8,7 +8,6 @@ connect_str = os.getenv('AZURE_STORAGE_CONNECTION_STRING') # retrieve the connec
 container_name = "cp-images" # container name in which images will be store in the storage account
 
 blob_service_client = BlobServiceClient.from_connection_string(conn_str=connect_str) # create a blob service client to interact with the storage account
-blob_service_client._primary_endpoint = os.getenv('AZURE_STORAGE_PRIVATE_ENDPOINT')
 
 try:
     container_client = blob_service_client.get_container_client(container=container_name) # get container client to interact with the container in which images will be stored
