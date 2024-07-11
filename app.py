@@ -1,45 +1,51 @@
-from flask import Flask, render_template_string, send_file
-from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
-from io import BytesIO
-
+import os
+from azure.storage.blob import BlobServiceClient
+from flask import Flask, request, redirect, render_template
 
 app = Flask(__name__)
 
-AZURE_CONNECTION_STRING = os.getenv('AZURE_STORAGEBLOB_CONNECTIONSTRING')
-CONTAINER_NAME = 'cp-images'
+# Retrieve connection string
+# Add your AZURE_STORAGE_CONNECTION_STRING 
+connect_str = os.getenv('AZURE_STORAGEBLOB_CONNECTIONSTRING')
+if not connect_str:
+	raise ValueError("Please set the AZURE_STORAGE_CONNECTION_STRING environment variable")
 
-# Initialize the BlobServiceClient
-blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
-container_client = blob_service_client.get_container_client(CONTAINER_NAME)
+container_name = 'cp-images'
+blob_service_client = BlobServiceClient.from_connection_string(conn_str=connect_str)
 
-@app.route('/')
-def index():
-    # List all blobs in the container
-    blobs = container_client.list_blobs()
-    image_urls = [blob.name for blob in blobs]
-    
-    # Render the image URLs in the HTML template
-    return render_template_string('''
-        <h1>Images</h1>
-        <ul>
-        {% for url in image_urls %}
-            <li><a href="/image/{{ url }}">{{ url }}</a></li>
-        {% endfor %}
-        </ul>
-    ''', image_urls=image_urls)
+try:
+	container_client = blob_service_client.get_container_client(container=container_name)
+	container_client.get_container_properties()
+except Exception as e:
+	print(e)
+	print("Creating container...")
+	container_client = blob_service_client.create_container(container_name)
 
-@app.route('/image/<path:filename>')
-def get_image(filename):
-    # Get the blob client
-    blob_client = container_client.get_blob_client(blob=filename)
-    
-    # Download the blob as a stream
-    stream = BytesIO()
-    blob_client.download_blob().readinto(stream)
-    stream.seek(0)
+@app.route("/")
+def view_media():
+	blob_items = container_client.list_blobs()
+	images = []
+	videos = []
 
-    # Send the image file to the browser
-    return send_file(stream, mimetype='image/jpeg')
+	for blob in blob_items:
+		blob_client = container_client.get_blob_client(blob=blob.name)
+		if blob.name.endswith(('.png', '.jpeg', '.jpg', '.gif')):
+			images.append(blob_client.url)
+		elif blob.name.endswith(('.mp4', '.webm', '.ogg')):
+			videos.append(blob_client.url)
+			
+	return render_template('index.html', images=images, videos=videos)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+@app.route("/upload-media", methods=["POST"])
+def upload_media():
+	for file in request.files.getlist("media"):
+		try:
+			container_client.upload_blob(file.filename, file)
+		except Exception as e:
+			print(e)
+			print("Ignoring duplicate filenames")
+	return redirect('/')
+
+if __name__ == "__main__":
+	app.run(debug=True)
