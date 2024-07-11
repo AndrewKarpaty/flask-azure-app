@@ -5,7 +5,7 @@ from flask import Flask, request, redirect
 app = Flask(__name__)  
 
 connect_str = os.getenv('AZURE_STORAGEBLOB_CONNECTIONSTRING') # retrieve the connection string from the environment variable
-container_name = "cp-images" # container name in which images will be store in the storage account
+container_name = "photos" # container name in which images will be store in the storage account
 
 blob_service_client = BlobServiceClient.from_connection_string(conn_str=connect_str) # create a blob service client to interact with the storage account
 
