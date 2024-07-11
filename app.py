@@ -1,97 +1,45 @@
-import os   
-from azure.storage.blob import BlobServiceClient
-from flask import Flask, request, redirect, render_template_string
+from flask import Flask, render_template_string, send_file
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient
+from io import BytesIO
 
-app = Flask(__name__)  
+app = Flask(__name__)
 
-connect_str = os.getenv('AZURE_STORAGEBLOB_CONNECTIONSTRING') # retrieve the connection string from the environment variable
-container_name = "cp-images" # container name in which images will be stored in the storage account
+# Configure your Azure Blob Storage connection string and container name
+AZURE_CONNECTION_STRING = 'your_connection_string_here'
+CONTAINER_NAME = 'your_container_name_here'
 
-blob_service_client = BlobServiceClient.from_connection_string(conn_str=connect_str) # create a blob service client to interact with the storage account
+# Initialize the BlobServiceClient
+blob_service_client = BlobServiceClient.from_connection_string(AZURE_CONNECTION_STRING)
+container_client = blob_service_client.get_container_client(CONTAINER_NAME)
 
-try:
-    container_client = blob_service_client.get_container_client(container=container_name) # get container client to interact with the container in which images will be stored
-    container_client.get_container_properties() # get properties of the container to force exception to be thrown if container does not exist
-except Exception as e:
-    container_client = blob_service_client.create_container(container_name) # create a container in the storage account if it does not exist
-
-@app.route("/")
-def home():
-    return render_template_string("""
-    <head>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
-    </head>
-    <body>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-            <div class="container">
-                <a class="navbar-brand" href="/">Photos App</a>
-            </div>
-        </nav>
-        <div class="container">
-            <div class="card" style="margin: 1em 0; padding: 1em 0 0 0; align-items: center;">
-                <h3>Upload new File</h3>
-                <div class="form-group">
-                    <form method="post" action="/upload-photos" enctype="multipart/form-data">
-                        <div style="display: flex;">
-                            <input type="file" accept=".png, .jpeg, .jpg, .gif" name="photos" multiple class="form-control" style="margin-right: 1em;">
-                            <input type="submit" class="btn btn-primary">
-                        </div>
-                    </form>
-                </div> 
-            </div>
-            <div style="text-align: center;">
-                <a href="/view-photos" class="btn btn-success">View Photos</a>
-            </div>
-        </div>
-    </body>
-    """)
-
-@app.route("/view-photos")
-def view_photos():
-    blob_items = container_client.list_blobs() # list all the blobs in the container
-
-    img_html = "<div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>"
-
-    for blob in blob_items:
-        blob_client = container_client.get_blob_client(blob=blob.name) # get blob client to interact with the blob and get blob url
-        img_html += "<img src='{}' width='auto' height='200' style='margin: 0.5em 0;'/>".format(blob_client.url) # get the blob url and append it to the html
+@app.route('/')
+def index():
+    # List all blobs in the container
+    blobs = container_client.list_blobs()
+    image_urls = [blob.name for blob in blobs]
     
-    img_html += "</div>"
+    # Render the image URLs in the HTML template
+    return render_template_string('''
+        <h1>Images</h1>
+        <ul>
+        {% for url in image_urls %}
+            <li><a href="/image/{{ url }}">{{ url }}</a></li>
+        {% endfor %}
+        </ul>
+    ''', image_urls=image_urls)
 
-    return render_template_string("""
-    <head>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
-    </head>
-    <body>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-            <div class="container">
-                <a class="navbar-brand" href="/">Photos App</a>
-            </div>
-        </nav>
-        <div class="container">
-            <div style="margin: 1em 0; padding: 1em 0; align-items: center;">
-                <h3>Uploaded Photos</h3>
-                <a href="/" class="btn btn-primary">Upload More Photos</a>
-            </div>
-            {{ img_html|safe }}
-        </div>
-    </body>
-    """, img_html=img_html)
+@app.route('/image/<path:filename>')
+def get_image(filename):
+    # Get the blob client
+    blob_client = container_client.get_blob_client(blob=filename)
+    
+    # Download the blob as a stream
+    stream = BytesIO()
+    blob_client.download_blob().readinto(stream)
+    stream.seek(0)
 
-# flask endpoint to upload a photo  
-@app.route("/upload-photos", methods=["POST"])
-def upload_photos():
-    filenames = ""
+    # Send the image file to the browser
+    return send_file(stream, mimetype='image/jpeg')
 
-    for file in request.files.getlist("photos"):
-        try:
-            container_client.upload_blob(file.filename, file) # upload the file to the container using the filename as the blob name
-            filenames += file.filename + "<br /> "
-        except Exception as e:
-            print(e)
-            print("Ignoring duplicate filenames") # ignore duplicate filenames
-        
-    return redirect('/view-photos')  
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
