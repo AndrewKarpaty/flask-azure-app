@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, redirect, render_template_string, send_file
 from azure.storage.blob import BlobServiceClient
 import io
+import base64
 
 app = Flask(__name__)
 
@@ -51,38 +52,42 @@ def home():
 
 @app.route("/view-photos")
 def view_photos():
-    blob_items = container_client.list_blobs()  # List all the blobs in the container
+    try:
+        blob_items = container_client.list_blobs()  # List all the blobs in the container
+        img_html = "<div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>"
 
-    img_html = "<div style='display: flex; justify-content: space-between; flex-wrap: wrap;'>"
+        for blob in blob_items:
+            blob_client = container_client.get_blob_client(blob.name)  # Get blob client to interact with the blob
+            # Download blob content
+            download_stream = blob_client.download_blob()
+            blob_data = download_stream.readall()
+            # Encode blob data to base64
+            blob_data_base64 = base64.b64encode(blob_data).decode('utf-8')
+            img_html += f"<img src='data:image/jpeg;base64,{blob_data_base64}' width='auto' height='200' style='margin: 0.5em 0;'/>"  # Display the image
 
-    for blob in blob_items:
-        blob_client = container_client.get_blob_client(blob.name)  # Get blob client to interact with the blob
-        # Download blob content
-        download_stream = blob_client.download_blob()
-        blob_data = download_stream.readall()
-        img_html += f"<img src='data:image/jpeg;base64,{blob_data.encode('base64')}' width='auto' height='200' style='margin: 0.5em 0;'/>"  # Display the image
+        img_html += "</div>"
 
-    img_html += "</div>"
-
-    return render_template_string("""
-    <head>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
-    </head>
-    <body>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        return render_template_string("""
+        <head>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+        </head>
+        <body>
+            <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+                <div class="container">
+                    <a class="navbar-brand" href="/">Photos App</a>
+                </div>
+            </nav>
             <div class="container">
-                <a class="navbar-brand" href="/">Photos App</a>
+                <div style="margin: 1em 0; padding: 1em 0; align-items: center;">
+                    <h3>Uploaded Photos</h3>
+                    <a href="/" class="btn btn-primary">Upload More Photos</a>
+                </div>
+                {{ img_html|safe }}
             </div>
-        </nav>
-        <div class="container">
-            <div style="margin: 1em 0; padding: 1em 0; align-items: center;">
-                <h3>Uploaded Photos</h3>
-                <a href="/" class="btn btn-primary">Upload More Photos</a>
-            </div>
-            {{ img_html|safe }}
-        </div>
-    </body>
-    """, img_html=img_html)
+        </body>
+        """, img_html=img_html)
+    except Exception as e:
+        return f"An error occurred: {str(e)}", 500
 
 
 @app.route("/upload-photos", methods=["POST"])
